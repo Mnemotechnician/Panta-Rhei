@@ -26,7 +26,7 @@ public sealed class FootPrintsSystem : EntitySystem
     private EntityQuery<TransformComponent> _transformQuery;
     private EntityQuery<MobThresholdsComponent> _mobThresholdQuery;
     private EntityQuery<AppearanceComponent> _appearanceQuery;
-    
+
 //    private EntityQuery<LayingDownComponent> _layingQuery;
 
     public override void Initialize()
@@ -45,6 +45,7 @@ public sealed class FootPrintsSystem : EntitySystem
     private void OnStartupComponent(EntityUid uid, FootPrintsComponent component, ComponentStartup args)
     {
         component.StepSize = Math.Max(0f, component.StepSize + _random.NextFloat(-0.05f, 0.05f));
+        Log.Error("Floofstation - do not use FootPrintsComponent! Migrate to using NeoFootprintsComponent.");
     }
 
     private void OnMove(EntityUid uid, FootPrintsComponent component, ref MoveEvent args)

@@ -228,7 +228,7 @@
     - DoorBumpOpener
     - AnomalyHost
   - type: PotentialPsionic # DeltaV - organic species can all be psionic
-  - type: FootPrints # DeltaV port from EE, blood splatter
+  - type: NeoFootprints # DeltaV port from EE, blood splatter # Floofstation - replace with NeoFootprints
   - type: Targeting # Shitmed Change
   - type: SurgeryTarget # Shitmed Change
   - type: CosmicCenserTarget # DeltaV - Cosmic Cult
