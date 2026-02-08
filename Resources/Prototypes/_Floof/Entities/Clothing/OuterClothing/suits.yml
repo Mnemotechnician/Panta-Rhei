@@ -14,4 +14,6 @@
     clothingPrototype: ClothingHeadHatShrimpFishermanHood
   - type: ContainerContainer
     containers:
-      toggleable-clothing: !type:ContainerSlot {}
+      toggleable-clothing: !type:ContainerSlot
+      toggleable-under-clothing: !type:ContainerSlot
+
