@@ -60,6 +60,30 @@ public sealed partial class LeashComponent : Component
     public sealed partial class LeashData
     {
         /// <summary>
+        ///     The entity attached to this leash. NOT the anchor.
+        /// </summary>
+        [DataField]
+        public NetEntity Pulled = NetEntity.Invalid;
+
+        [DataField]
+        public List<LeashLinkData> Links = new();
+
+        public LeashData(NetEntity pulled)
+        {
+            Pulled = pulled;
+        }
+    };
+
+    /// <summary>
+    ///     Represents one link of a leash chain.
+    /// </summary>
+    [DataDefinition, Serializable, NetSerializable]
+    public sealed partial class LeashLinkData
+    {
+        [DataField]
+        public NetEntity Start, End;
+
+        /// <summary>
         ///     Id of the joint created by this leash. May be null if this leash does not currently create a joint
         ///     (e.g. because it's attached to the same entity who holds it)
         /// </summary>
@@ -67,21 +91,9 @@ public sealed partial class LeashComponent : Component
         public string? JointId = null;
 
         /// <summary>
-        ///     The entity attached to this leash. NOT the anchor.
-        /// </summary>
-        [DataField]
-        public NetEntity Pulled = NetEntity.Invalid;
-
-        /// <summary>
         ///     Entity used to visualize the leash. Created dynamically.
         /// </summary>
         [DataField]
         public NetEntity? LeashVisuals = null;
-
-        public LeashData(string? jointId, NetEntity pulled)
-        {
-            JointId = jointId;
-            Pulled = pulled;
-        }
-    };
+    }
 }

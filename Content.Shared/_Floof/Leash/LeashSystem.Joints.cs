@@ -1,9 +1,13 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using Content.Shared._Floof.Leash.Components;
+using Content.Shared.Weapons.Ranged.Components;
 using Robust.Shared.Containers;
+using Robust.Shared.Map;
 using Robust.Shared.Physics;
 using Robust.Shared.Physics.Dynamics.Joints;
 using Robust.Shared.Physics.Systems;
+using Robust.Shared.Utility;
 
 namespace Content.Shared._Floof.Leash;
 
@@ -36,7 +40,6 @@ public sealed partial class LeashSystem
             || ent.Comp.LifeStage >= ComponentLifeStage.Removing
             || GetEntity(ent.Comp.Leash) is not { } leashEnt
             || GetEntity(ent.Comp.Anchor) is not { } anchorEnt
-            || ent.Comp.JointId != id
             || TerminatingOrDeleted(leashEnt)
             || !TryComp<LeashAnchorComponent>(anchorEnt, out var anchor)
             || !TryComp<LeashComponent>(leashEnt, out var leash))
@@ -122,23 +125,100 @@ public sealed partial class LeashSystem
         return a != bOuter?.Owner && b != aOuter?.Owner && aOuter?.Owner != bOuter?.Owner;
     }
 
-    private DistanceJoint CreateLeashJoint(string jointId, Entity<LeashComponent> leash, EntityUid leashTarget)
+    private List<LeashComponent.LeashLinkData> CreateLeashJoint(string jointIdBase, Entity<LeashComponent> leash, EntityUid leashTarget)
     {
-        var joint = _joints.CreateDistanceJoint(leash, leashTarget, id: jointId);
-        // If the soon-to-be-leashed entity is too far away, we don't force it any closer.
-        // The system will automatically reduce the length of the leash once it gets closer.
-        var length = Transform(leashTarget)
-            .Coordinates.TryDistance(EntityManager, Transform(leash).Coordinates, out var dist)
-            ? MathF.Max(dist, leash.Comp.Length)
-            : leash.Comp.Length;
+        // Client cant predict for shit
+        if (_net.IsClient)
+            return new List<LeashComponent.LeashLinkData>()
+            {
+                new()
+                {
+                    Start = GetNetEntity(leash),
+                    End = GetNetEntity(leashTarget),
+                }
+            };
 
-        joint.MinLength = 0f;
-        joint.MaxLength = length;
-        joint.Stiffness = 0f;
-        joint.CollideConnected = true; // This is just for performance reasons and doesn't actually make mobs collide.
-        joint.Damping = 0f;
+        var mapPosA = Transform(leash).Coordinates.ToMap(EntityManager, _xform);
+        var mapPosB = Transform(leashTarget).Coordinates.ToMap(EntityManager, _xform);
+        var mapId = mapPosA.MapId;
 
-        return joint;
+        // Spawn each link entity at an interpolated position
+        var numberOfEntities = 10;
+        var linkEntities = new EntityUid[10 + 2];
+        linkEntities[0] = leash;
+        linkEntities[linkEntities.Length - 1] = leashTarget;
+        for (int i = 0; i < numberOfEntities; i++)
+        {
+            float t = (i + 1) / (float)(numberOfEntities + 2);
+            var interpolated = Vector2.Lerp(mapPosA.Position, mapPosB.Position, t);
+            var spawnCoords = new MapCoordinates(interpolated, mapId);
+            var link = Spawn("LeashLink", spawnCoords);
+
+            linkEntities[i + 1] = link;
+        }
+
+        // Link first entitye to the leash, last entity to the target, and interlink everything else
+        var links = new List<LeashComponent.LeashLinkData>(numberOfEntities + 1);
+        for (int i = 1; i < linkEntities.Length; i++)
+        {
+            var a = linkEntities[i - 1];
+            var b = linkEntities[i];
+            links.Add(ActuallyCreateJoint(a, b, i));
+        }
+
+        return links;
+
+        LeashComponent.LeashLinkData ActuallyCreateJoint(EntityUid a, EntityUid b, int suffix)
+        {
+            var data = new LeashComponent.LeashLinkData();
+            data.Start = GetNetEntity(a);
+            data.End = GetNetEntity(b);
+
+            var joint = _joints.CreateDistanceJoint(a, b, id: jointIdBase + "-" + suffix);
+            joint.MinLength = 0f;
+            joint.MaxLength = 100; // Will be updated in the update loop and shortened if possible. If not, we want to avoid pulling to too close anyway.
+            joint.Stiffness = 0f;
+            joint.CollideConnected = true; // This is just for performance reasons and doesn't actually make mobs collide.
+            joint.Damping = 0f;
+            data.JointId = joint.ID;
+
+            _container.EnsureContainer<ContainerSlot>(a, LeashedComponent.VisualsContainerName);
+            if (leash.Comp.LeashSprite is not null && EntityManager.TrySpawnInContainer(null, a, LeashedComponent.VisualsContainerName, out var visualEntity))
+            {
+                var visualComp = EnsureComp<LeashedVisualsComponent>(visualEntity.Value);
+                visualComp.Sprite = leash.Comp.LeashSprite;
+                visualComp.Source = a;
+                visualComp.Target = b;
+
+                if (TryComp<LeashAnchorComponent>(leashTarget, out var anchor))
+                    visualComp.OffsetTarget = anchor.Offset;
+
+                data.LeashVisuals = GetNetEntity(visualEntity);
+            }
+
+            return data;
+        }
+    }
+
+    private void DestroyJoint(Entity<LeashComponent> leash, LeashComponent.LeashData data, Entity<LeashedComponent> leashed)
+    {
+        // All links except the fist one have their start connected to another link
+        // Still we perform extra checks just in case
+        var leashNetEnt = GetNetEntity(leash);
+        for (var i = 1; i < data.Links.Count; i++)
+        {
+            var linkData = data.Links[i];
+            if (linkData.Start == leashNetEnt)
+                continue;
+
+            QueueDel(GetEntity(linkData.Start));
+        }
+
+        // The leash only needs removing the leash visuals
+        if (_container.TryGetContainer(leash, LeashedComponent.VisualsContainerName, out var visualsCont))
+            _container.CleanContainer(visualsCont);
+
+        data.Links.Clear();
     }
 
     /// <summary>
@@ -161,12 +241,11 @@ public sealed partial class LeashSystem
     private void RefreshJoint(Entity<LeashComponent> leash, LeashComponent.LeashData data, Entity<LeashedComponent> leashed)
     {
         var shouldExist = CanCreateJoint(leashed, leash);
-        var exists = data.JointId != null;
+        var exists = data.Links.Count > 0;
 
-        if (exists && !shouldExist && TryComp<JointComponent>(leashed, out var jointComp) &&
-            jointComp.GetJoints.TryGetValue(data.JointId!, out var joint))
+        if (exists && !shouldExist)
         {
-            DisableJointFor(data, leashed, joint);
+            DisableJointFor(leash, data, leashed);
             Log.Debug($"Removed obsolete leash joint between {leash.Owner} and {leashed.Owner}");
         }
         else if (!exists && shouldExist)
@@ -179,21 +258,25 @@ public sealed partial class LeashSystem
     /// <summary>
     ///     Enables a previously disabled leash joint.
     /// </summary>
-    private DistanceJoint EnableJointFor(Entity<LeashComponent> leash, LeashComponent.LeashData data, Entity<LeashedComponent> leashed)
+    private void EnableJointFor(Entity<LeashComponent> leash, LeashComponent.LeashData data, Entity<LeashedComponent> leashed)
     {
         var jointId = $"${LeashJointIdPrefix}{data.Pulled}";
         var joint = CreateLeashJoint(jointId, leash, leashed);
-        data.JointId = leashed.Comp.JointId = jointId;
 
-        return joint;
+        data.Links = joint;
     }
 
     /// <summary>
     ///     Disables the leash joint by destroying the underlying leash joints and components.
     /// </summary>
-    private void DisableJointFor(LeashComponent.LeashData data, LeashedComponent leashed, Joint joint)
+    private void DisableJointFor(Entity<LeashComponent> leash, LeashComponent.LeashData data, Entity<LeashedComponent> leashed)
     {
-        data.JointId = leashed.JointId = null;
-        _joints.RemoveJoint(joint);
+        foreach (var link in data.Links)
+        {
+            if (GetEntity(link.Start) is {} start)
+                _joints.RemoveJoint(start, link.JointId!);
+        }
+
+        data.Links.Clear();
     }
 }

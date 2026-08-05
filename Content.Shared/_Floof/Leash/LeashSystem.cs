@@ -92,42 +92,51 @@ public sealed partial class LeashSystem : EntitySystem
         if (data.Pulled == NetEntity.Invalid || !TryGetEntity(data.Pulled, out var target))
             return;
 
-        DistanceJoint? joint = null;
-        if (data.JointId is not null
-            && TryComp<JointComponent>(target, out var jointComp)
-            && jointComp.GetJoints.TryGetValue(data.JointId, out var _joint)
-        )
-            joint = _joint as DistanceJoint;
-
-        // Client: set max distance to infinity to prevent the client from ever predicting leashes.
-        if (_net.IsClient)
+        float dst = 0;
+        if (_net.IsServer)
         {
-            if (joint is not null && !ShouldPredictLeashes())
-                joint.MaxLength = float.MaxValue;
-
-            return;
+            // Server: break each leash joint whose entities are on different maps or are too far apart
+            var targetXForm = Transform(target.Value);
+            if (targetXForm.MapUid != sourceXForm.MapUid
+                || !sourceXForm.Coordinates.TryDistance(EntityManager, targetXForm.Coordinates, out dst)
+                || dst > leash.MaxDistance)
+            {
+                RemoveLeash(target.Value, (leashEnt, leash));
+                _popups.PopupEntity(Loc.GetString("leash-snap-popup", ("leash", leashEnt)), target.Value);
+                return;
+            }
         }
 
-        // Server: break each leash joint whose entities are on different maps or are too far apart
-        var targetXForm = Transform(target.Value);
-        if (targetXForm.MapUid != sourceXForm.MapUid
-            || !sourceXForm.Coordinates.TryDistance(EntityManager, targetXForm.Coordinates, out var dst)
-            || dst > leash.MaxDistance)
+        foreach (var linkData in data.Links)
         {
-            RemoveLeash(target.Value, (leashEnt, leash));
-            _popups.PopupEntity(Loc.GetString("leash-snap-popup", ("leash", leashEnt)), target.Value);
-            return;
+            var linkStart = GetEntity(linkData.Start);
+
+            DistanceJoint? joint = null;
+            if (linkData.JointId is not null
+                && TryComp<JointComponent>(linkStart, out var jointComp)
+                && jointComp.GetJoints.TryGetValue(linkData.JointId, out var _joint)
+               )
+                joint = _joint as DistanceJoint;
+
+            // Client: set max distance to infinity to prevent the client from ever predicting leashes.
+            if (_net.IsClient)
+            {
+                if (joint is not null && !ShouldPredictLeashes())
+                    joint.MaxLength = float.MaxValue;
+
+                return;
+            }
+
+            // Server: update leash lengths if necessary/possible
+            // The length can be increased freely, but can only be decreased if the pulled entity is close enough
+            // NOTE: joint.length is the NATURAL distance between bodies, to which they gravitate. Joint.MaxLength is the MAXIMUM distance (at which positions are clamped)
+            // We do not care about joint.length as leash joints are supposed to allow entities to freely come closer/further within the leash length.
+            if (joint is not null && joint.MaxLength > leash.Length && dst < joint.MaxLength)
+                joint.MaxLength = Math.Max(dst, leash.Length);
+
+            if (joint is not null && joint.MaxLength < leash.Length)
+                joint.MaxLength = leash.Length;
         }
-
-        // Server: update leash lengths if necessary/possible
-        // The length can be increased freely, but can only be decreased if the pulled entity is close enough
-        // NOTE: joint.length is the NATURAL distance between bodies, to which they gravitate. Joint.MaxLength is the MAXIMUM distance (at which positions are clamped)
-        // We do not care about joint.length as leash joints are supposed to allow entities to freely come closer/further within the leash length.
-        if (joint is not null && joint.MaxLength > leash.Length && dst < joint.MaxLength)
-            joint.MaxLength = Math.Max(dst, leash.Length);
-
-        if (joint is not null && joint.MaxLength < leash.Length)
-            joint.MaxLength = leash.Length;
     }
 
     #endregion
@@ -277,7 +286,7 @@ public sealed partial class LeashSystem : EntitySystem
         return leash.Comp.Leashed.Count < leash.Comp.MaxJoints
             && GetLeashed(anchor).Comp?.Leash == null
             && Transform(anchor).Coordinates.TryDistance(EntityManager, Transform(leash).Coordinates, out var dst)
-            && dst <= leash.Comp.Length;
+            && dst <= leash.Comp.MaxDistance;
     }
 
     /// <summary>
@@ -360,9 +369,8 @@ public sealed partial class LeashSystem : EntitySystem
 
         // Do not allow to leash the same person twice, this horribly breaks everything
         if (TryComp<LeashedComponent>(leashTarget, out var leashedComp)
-            && leashedComp.JointId is not null
             && TryComp<JointComponent>(leashTarget, out var existingJointComp)
-            && existingJointComp.GetJoints.ContainsKey(leashedComp.JointId))
+            && existingJointComp.GetJoints.Any(it => it.Key.StartsWith(LeashJointIdPrefix)))
             return;
 
         // Do not allow to create the joint if the target is too far away - this is mostly to prevent re-creating leashes after teleportation
@@ -373,27 +381,12 @@ public sealed partial class LeashSystem : EntitySystem
 
         leashedComp = EnsureComp<LeashedComponent>(leashTarget);
         var netLeashTarget = GetNetEntity(leashTarget);
-        var data = new LeashComponent.LeashData(null, netLeashTarget);
+        var data = new LeashComponent.LeashData(netLeashTarget);
 
         leashedComp.Leash = GetNetEntity(leash);
         leashedComp.Anchor = GetNetEntity(anchor);
 
         RefreshJoint(leash, data, (leashTarget, leashedComp));
-
-        if (leash.Comp.LeashSprite is { } sprite)
-        {
-            _container.EnsureContainer<ContainerSlot>(leashTarget, LeashedComponent.VisualsContainerName);
-            if (EntityManager.TrySpawnInContainer(null, leashTarget, LeashedComponent.VisualsContainerName, out var visualEntity))
-            {
-                var visualComp = EnsureComp<LeashedVisualsComponent>(visualEntity.Value);
-                visualComp.Sprite = sprite;
-                visualComp.Source = leash;
-                visualComp.Target = leashTarget;
-                visualComp.OffsetTarget = anchor.Comp.Offset;
-
-                data.LeashVisuals = GetNetEntity(visualEntity);
-            }
-        }
 
         leash.Comp.Leashed.Add(data);
         Dirty(leash);
@@ -404,22 +397,19 @@ public sealed partial class LeashSystem : EntitySystem
         if (_net.IsClient || !Resolve(leashed, ref leashed.Comp))
             return;
 
-        var jointId = leashed.Comp.JointId;
-        leashed.Comp.JointId = null; // Just so future checks know that we deliberately removed the leash
         RemCompDeferred<LeashedComponent>(leashed); // Has to be deferred else the client explodes for some reason
-
-        if (_container.TryGetContainer(leashed, LeashedComponent.VisualsContainerName, out var visualsContainer))
-            _container.CleanContainer(visualsContainer);
-
         if (Resolve(leash, ref leash.Comp, false))
         {
-            var leashedData = leash.Comp.Leashed.Where(it => it.JointId == jointId).ToList();
+            var leashedNetEnt = GetNetEntity(leashed);
+            var leashedData = leash.Comp.Leashed.Where(it => it.Pulled == leashedNetEnt).ToList();
             foreach (var data in leashedData)
                 leash.Comp.Leashed.Remove(data);
-        }
 
-        if (breakJoint && jointId is not null)
-            _joints.RemoveJoint(leash, jointId);
+            foreach (var removed in leashedData)
+            {
+                DestroyJoint(leash!, removed, leashed!);
+            }
+        }
 
         Dirty(leash);
     }

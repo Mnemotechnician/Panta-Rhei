@@ -24,9 +24,9 @@
   parent: BaseLeash
   components:
   - type: Leash
-    length: 3
-    lengthConfigs: &leashConfigs [1, 1.5, 2, 2.5, 3, 4]
-    maxDistance: 6
+    length: 0.5
+    lengthConfigs: &leashConfigs [0.1, 0.2, 0.3]
+    maxDistance: 60
     attachDelay: 4
     detachDelay: 4
     selfDetachDelay: 10
@@ -58,3 +58,31 @@
     detachDelay: 5
     selfDetachDelay: 20
     pullInterval: 0.1
+
+
+# Leash link
+- type: entity
+  id: LeashLink
+  name: leash link
+  description: YOU SHOULD NOT SEE THIS
+  components:
+  - type: CollisionWake
+  - type: GravityAffected
+  - type: Physics
+    bodyType: Dynamic
+    fixedRotation: false
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeCircle
+          radius: 0.1
+          position: 0,0
+        density: 20
+        mask:
+        - Leash
+        - ItemMask
+        layer:
+        - Leash
+        restitution: 0.3
+        friction: 0.2
