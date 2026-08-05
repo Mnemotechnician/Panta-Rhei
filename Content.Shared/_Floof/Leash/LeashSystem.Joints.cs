@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Content.Shared._Floof.Leash.Components;
 using Robust.Shared.Containers;
 using Robust.Shared.Physics;
@@ -149,28 +150,50 @@ public sealed partial class LeashSystem
     {
         foreach (var data in leash.Comp.Leashed)
         {
-            if (!TryGetEntity(data.Pulled, out var pulled) || !TryComp<LeashedComponent>(pulled, out var leashed))
+            if (!TryGetEntity(data.Pulled, out var pulled) || !TryComp<LeashedComponent>(pulled, out var leashedComp))
                 continue;
 
-            var shouldExist = CanCreateJoint(pulled.Value, leash);
-            var exists = data.JointId != null;
-
-            if (exists && !shouldExist && TryComp<JointComponent>(pulled, out var jointComp) &&
-                jointComp.GetJoints.TryGetValue(data.JointId!, out var joint))
-            {
-                data.JointId = leashed.JointId = null;
-                _joints.RemoveJoint(joint);
-
-                Log.Debug($"Removed obsolete leash joint between {leash.Owner} and {pulled.Value}");
-            }
-            else if (!exists && shouldExist)
-            {
-                var jointId = $"leash-joint-{data.Pulled}";
-                joint = CreateLeashJoint(jointId, leash, pulled.Value);
-                data.JointId = leashed.JointId = jointId;
-
-                Log.Debug($"Added new leash joint between {leash.Owner} and {pulled.Value}");
-            }
+            RefreshJoint(leash, data, (pulled.Value, leashedComp));
         }
+    }
+
+    /// <seealso cref="RefreshJoints"/>
+    private void RefreshJoint(Entity<LeashComponent> leash, LeashComponent.LeashData data, Entity<LeashedComponent> leashed)
+    {
+        var shouldExist = CanCreateJoint(leashed, leash);
+        var exists = data.JointId != null;
+
+        if (exists && !shouldExist && TryComp<JointComponent>(leashed, out var jointComp) &&
+            jointComp.GetJoints.TryGetValue(data.JointId!, out var joint))
+        {
+            DisableJointFor(data, leashed, joint);
+            Log.Debug($"Removed obsolete leash joint between {leash.Owner} and {leashed.Owner}");
+        }
+        else if (!exists && shouldExist)
+        {
+            EnableJointFor(leash, data, leashed);
+            Log.Debug($"Added new leash joint between {leash.Owner} and {leashed.Owner}");
+        }
+    }
+
+    /// <summary>
+    ///     Enables a previously disabled leash joint.
+    /// </summary>
+    private DistanceJoint EnableJointFor(Entity<LeashComponent> leash, LeashComponent.LeashData data, Entity<LeashedComponent> leashed)
+    {
+        var jointId = $"${LeashJointIdPrefix}{data.Pulled}";
+        var joint = CreateLeashJoint(jointId, leash, leashed);
+        data.JointId = leashed.Comp.JointId = jointId;
+
+        return joint;
+    }
+
+    /// <summary>
+    ///     Disables the leash joint by destroying the underlying leash joints and components.
+    /// </summary>
+    private void DisableJointFor(LeashComponent.LeashData data, LeashedComponent leashed, Joint joint)
+    {
+        data.JointId = leashed.JointId = null;
+        _joints.RemoveJoint(joint);
     }
 }

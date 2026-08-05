@@ -378,16 +378,7 @@ public sealed partial class LeashSystem : EntitySystem
         leashedComp.Leash = GetNetEntity(leash);
         leashedComp.Anchor = GetNetEntity(anchor);
 
-        if (CanCreateJoint(leashTarget, leash))
-        {
-            var jointId = $"{LeashJointIdPrefix}{netLeashTarget}";
-            var joint = CreateLeashJoint(jointId, leash, leashTarget);
-            data.JointId = leashedComp.JointId = jointId;
-        }
-        else
-        {
-            leashedComp.JointId = null;
-        }
+        RefreshJoint(leash, data, (leashTarget, leashedComp));
 
         if (leash.Comp.LeashSprite is { } sprite)
         {
