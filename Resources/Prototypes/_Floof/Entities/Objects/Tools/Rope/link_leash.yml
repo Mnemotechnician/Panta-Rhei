@@ -1,0 +1,15 @@
+
+# Standard leash (10 segments)
+- type: RopeConfiguration
+  id: Leash10
+  parent: BaseRopeConfig
+  segments: 10
+  linkPrototype: LeashLink
+  sprite:
+    sprite: _Floof/Objects/Tools/leash-rope.rsi
+    state: rope
+
+- type: entity
+  parent: RopeLinkBase
+  id: RopeLinkLeash
+  name: leash link

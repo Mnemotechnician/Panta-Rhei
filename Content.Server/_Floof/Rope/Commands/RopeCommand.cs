@@ -1,0 +1,81 @@
+using System.Linq;
+using System.Transactions;
+using Content.Server.Administration;
+using Content.Shared._Floof.Rope.Components;
+using Content.Shared._Floof.Rope.Prototypes;
+using Content.Shared._Floof.Rope.Systems;
+using Content.Shared.Administration;
+using Robust.Shared.Toolshed;
+
+namespace Content.Server._Floof.Rope.Commands;
+
+[ToolshedCommand, AdminCommand(AdminFlags.VarEdit)]
+public sealed class RopeCommand : ToolshedCommand
+{
+    private RopeSystem? _rope;
+
+    [CommandImplementation("create")]
+    public EntityUid Create(EntityUid leftAnchor, EntityUid rightAnchor, RopeConfigurationPrototype prototype, float? length = null)
+    {
+        _rope ??= EntityManager.System<RopeSystem>();
+        if (!Transform(leftAnchor).Coordinates.TryDistance(EntityManager, Transform(rightAnchor).Coordinates, out var dst))
+            throw new Exception("Entities are on separate maps.");
+
+        length ??= dst;
+        if (length > dst)
+            throw new Exception("Refusing to create a rope shorter than the distance between its anchors.");
+
+        if (!_rope.TryCreateRope(leftAnchor, rightAnchor, prototype, length.Value, out var rope))
+            throw new Exception("Couldn't create rope. See the server console.");
+
+        return rope.Value.Owner;
+    }
+
+    [CommandImplementation("enumerate_links")]
+    public IEnumerable<EntityUid> EnumerateLinks([PipedArgument] EntityUid rope)
+    {
+        if (!TryComp<RopeComponent>(rope, out var comp))
+            throw new Exception("Not a rope");
+
+        return comp.Links.Select(it => it.LinkEntity);
+    }
+
+    [CommandImplementation("connect_start")]
+    public EntityUid ConnectStart([PipedArgument] EntityUid rope, EntityUid anchor)
+    {
+        if (!TryComp<RopeComponent>(rope, out var comp))
+            throw new Exception("Not a rope");
+
+        _rope ??= EntityManager.System<RopeSystem>();
+        if (!_rope.TryConnectRopeStart(rope, anchor))
+            throw new Exception("System call failed");
+
+        return rope;
+    }
+
+    [CommandImplementation("connect_end")]
+    public EntityUid ConnectEnd([PipedArgument] EntityUid rope, EntityUid anchor)
+    {
+        if (!TryComp<RopeComponent>(rope, out var comp))
+            throw new Exception("Not a rope");
+
+        _rope ??= EntityManager.System<RopeSystem>();
+        if (!_rope.TryConnectRopeEnd(rope, anchor))
+            throw new Exception("System call failed");
+
+        return rope;
+    }
+
+    [CommandImplementation("detach")]
+    public EntityUid ConnectEnd([PipedArgument] EntityUid rope)
+    {
+        if (!TryComp<RopeComponent>(rope, out var comp))
+            throw new Exception("Not a rope");
+
+        _rope ??= EntityManager.System<RopeSystem>();
+        if (!_rope.TryDetachEnd(rope) || !_rope.TryDetachStart(rope))
+            throw new Exception("System call failed");
+
+        return rope;
+    }
+}

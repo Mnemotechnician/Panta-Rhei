@@ -25,6 +25,7 @@
     <Folder Include="_EE\FootPrint\" />
     <Folder Include="_Euphoria\" />
     <Folder Include="_Floof\Lewd\" />
+    <Folder Include="_Floof\Rope\" />
     <Folder Include="_Goobstation\Power\" />
   </ItemGroup>
   <Import Project="..\RobustToolbox\MSBuild\Robust.Properties.targets" />

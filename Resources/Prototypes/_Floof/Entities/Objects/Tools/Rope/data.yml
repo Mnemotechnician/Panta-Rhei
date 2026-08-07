@@ -1,0 +1,8 @@
+- type: entity
+  id: RopeData
+  name: rope data entity
+  description: You shouldn't see this.
+  components:
+  - type: Tag
+    tags:
+    - HideContextMenu
