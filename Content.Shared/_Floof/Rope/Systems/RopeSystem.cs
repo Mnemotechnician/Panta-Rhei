@@ -13,5 +13,6 @@ public sealed partial class RopeSystem : EntitySystem
     public override void Initialize()
     {
         InitializeLifecycle();
+        InitializeNetworking();
     }
 }

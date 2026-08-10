@@ -29,7 +29,7 @@
     - HideContextMenu
 
 # Base configuration
-- type: RopeConfiguration
+- type: ropeConfiguration
   id: BaseRopeConfig
   abstract: true
   dataPrototype: RopeData
