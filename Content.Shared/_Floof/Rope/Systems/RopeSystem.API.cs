@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using Content.Shared._Floof.Leash.Components;
 using Content.Shared._Floof.Rope.Components;
 using Content.Shared._Floof.Rope.Prototypes;
@@ -15,7 +16,14 @@ public sealed partial class RopeSystem
     ///     Creates a rope between the two entities. Returns the rope data entity. By default, the data entity is placed on the same coordinates as the left entity.
     ///     Callers are advised to move it to an appropriate spot.
     /// </summary>
-    public bool TryCreateRope(EntityUid left, EntityUid right, RopeConfigurationPrototype config, float length, [NotNullWhen(true)] out Entity<RopeComponent>? createdRope)
+    public bool TryCreateRope(
+        EntityUid left,
+        EntityUid right,
+        RopeConfigurationPrototype config,
+        float length,
+        [NotNullWhen(true)] out Entity<RopeComponent>? createdRope,
+        Vector2 offsetLeft = default,
+        Vector2 offsetRight = default)
     {
         var leftXform = Transform(left);
         var rightXform = Transform(left);
@@ -25,7 +33,6 @@ public sealed partial class RopeSystem
             createdRope = null;
             return false;
         }
-
 
         if (GetEffectiveDistance(leftXform, rightXform) > length + _connectionDstTolerance)
         {
@@ -53,15 +60,15 @@ public sealed partial class RopeSystem
             _xform.SetWorldPosition(link.LinkEntity, pos);
         }
 
-        TryConnectRopeStart(rope!, left);
-        TryConnectRopeEnd(rope!, right);
+        TryConnectRopeStart(rope!, left, offsetLeft);
+        TryConnectRopeEnd(rope!, right, offsetRight);
 
         // Dirtying shouldn't be necessary since the rope has just been created
         return true;
     }
 
     // TODO code duplication?
-    public bool TryConnectRopeStart(Entity<RopeComponent?> rope, EntityUid connector)
+    public bool TryConnectRopeStart(Entity<RopeComponent?> rope, EntityUid connector, Vector2 offset = default)
     {
         if (!Resolve(rope, ref rope.Comp) || rope.Comp.ConnectedStart != null)
             return false; // already attached
@@ -79,7 +86,7 @@ public sealed partial class RopeSystem
             return false;
 
         // Create a distance joint
-        var joint = CreateDistanceJoint(connector, firstLink.LinkEntity, length);
+        var joint = CreateDistanceJoint(connector, firstLink.LinkEntity, length, offset);
         rope.Comp.ConnectedStart = (connector, joint.ID);
         firstLink.LeftJoint = joint.ID;
 
@@ -87,7 +94,7 @@ public sealed partial class RopeSystem
         return true;
     }
 
-    public bool TryConnectRopeEnd(Entity<RopeComponent?> rope, EntityUid connector)
+    public bool TryConnectRopeEnd(Entity<RopeComponent?> rope, EntityUid connector, Vector2 offset = default)
     {
         if (!Resolve(rope, ref rope.Comp) || rope.Comp.ConnectedEnd != null)
             return false; // already attached
@@ -105,7 +112,7 @@ public sealed partial class RopeSystem
             return false;
 
         // Create a distance joint
-        var joint = CreateDistanceJoint(connector, lastLink.LinkEntity, length);
+        var joint = CreateDistanceJoint(connector, lastLink.LinkEntity, length, offset);
         rope.Comp.ConnectedEnd = (connector, joint.ID);
         lastLink.RightJoint = joint.ID;
 
