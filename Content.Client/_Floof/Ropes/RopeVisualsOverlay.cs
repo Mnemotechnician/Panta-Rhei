@@ -2,12 +2,10 @@ using System.Linq;
 using System.Numerics;
 using Content.Shared._Floof.Paint;
 using Content.Shared._Floof.Ropes.Components;
-using Content.Shared._Floof.Ropes.Prototypes;
 using Content.Shared._Floof.Util;
 using Robust.Client.GameObjects;
 using Robust.Client.Graphics;
 using Robust.Shared.Enums;
-using Robust.Shared.Map;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
 
@@ -22,7 +20,6 @@ public sealed class RopeVisualsOverlay : Overlay
     private readonly SpriteSystem _sprites;
     private readonly SharedTransformSystem _xform;
     private readonly IPrototypeManager _prototypeManager;
-    private readonly IEyeManager _eyeManager;
 
     private readonly EntityQuery<TransformComponent> _xformQuery;
     private readonly EntityQuery<SpriteComponent> _spriteQuery;
@@ -33,12 +30,14 @@ public sealed class RopeVisualsOverlay : Overlay
 
     public RopeVisualsOverlay(IEntityManager entMan)
     {
+        ZIndex = (int) Shared.DrawDepth.DrawDepth.BelowMobs;
+
         _entMan = entMan;
         _timing = IoCManager.Resolve<IGameTiming>();
         _sprites = _entMan.System<SpriteSystem>();
         _xform = _entMan.System<SharedTransformSystem>();
         _prototypeManager = IoCManager.Resolve<IPrototypeManager>();
-        _eyeManager = IoCManager.Resolve<IEyeManager>();
+        IoCManager.Resolve<IEyeManager>();
 
         _xformQuery = _entMan.GetEntityQuery<TransformComponent>();
         _spriteQuery = _entMan.GetEntityQuery<SpriteComponent>();
@@ -107,11 +106,15 @@ public sealed class RopeVisualsOverlay : Overlay
                 continue;
             }
 
-            var color = _paintQuery.CompOrNull(ropeUid)?.Color ?? Color.White; // TODO: replace wiith a property
+            var color = ropeComp.Color ?? Color.White;
             DrawPolyline(positions, startIdx, endIdx, worldHandle, texture, color);
         }
     }
 
+    /// <summary>
+    ///     Draws a polyline in world coordinates between the vertices. Segments are drawn using the provided texture.
+    ///     Texture is tiled to make transitions look mostly seamless.
+    /// </summary>
     private void DrawPolyline(
         Vector2[] vertices,
         int startIdx,
@@ -120,77 +123,63 @@ public sealed class RopeVisualsOverlay : Overlay
         Texture texture,
         Color color)
     {
-        if (vertices.Length < 2)
+        if (endIdx - startIdx < 1)
             return;
 
-        // Compute lengths of each segment
-        // ith element contains the length of the segment between the vertices i and i+1
-        var lengths = new float[vertices.Length];
-        lengths[^1] = 0; // fallback
-        for (var i = 0; i < lengths.Length - 1; i++)
-            lengths[i] = (vertices[i + 1] - vertices[i]).Length();
+        var textureWidth = texture.Width / (float)EyeManager.PixelsPerMeter;
+        var textureHeight = texture.Height / (float)EyeManager.PixelsPerMeter;
 
-        // Draw tiles along the polyline formed by the elements of positions from startIdx to endIdx
-        var totalLength = lengths.Sum();
-        if (totalLength < 0.01f)
-            return;
+        // Offset within the current texture tile (0 <= texOffset < textureHeight)
+        var texOffset = 0f;
 
-        var textureWidth = texture.Width / (float) EyeManager.PixelsPerMeter;
-        var textureHeightTiling = texture.Height / (float) EyeManager.PixelsPerMeter;
-
-        // Due to texture tiling this can cause the texture to be drawn 100+ times, so uh...
-        if (totalLength > textureHeightTiling * 64)
+        // Go through each segment and draw it as one or more texture tiles
+        for (var i = startIdx; i < endIdx; i++)
         {
-            if (_logTicker.TryUpdate(_timing))
-                Log.Warning($"Polyline has an absurd length ({totalLength}), skipping.");
-            return;
-        }
-
-        // How much length of the polyline has been drawn
-        var currentDist = 0f;
-        // Position from which the next line will be drawn
-        var currentPos = vertices[startIdx];
-
-        while (currentDist < totalLength)
-        {
-            // In each iteration we do one of the following:
-            // 1. If this segment is short enough to be drawn with one instance of the rope texture (however much is left on it from the last segment), we do it and go to the next one
-            // 2. If this segment is too long, we draw a portion of it and then draw it again on the next iteration
-            var nextDist = Math.Min(currentDist + textureHeightTiling, totalLength);
-            var nextPos = GetPolylinePositionAtDistance(nextDist, vertices, lengths, startIdx, endIdx);
-            var segment = nextPos - currentPos;
-            // Skip tiny segments
-            var segLen = segment.Length();
-            if (segLen < 0.001f)
-            {
-                currentDist = nextDist;
-                currentPos = nextPos;
+            var segmentStart = vertices[i];
+            var segmentEnd = vertices[i + 1];
+            var segmentVec = segmentEnd - segmentStart;
+            var segmentLength = segmentVec.Length();
+            if (segmentLength < 0.001f)
                 continue;
-            }
 
-            var angle = segment.ToWorldAngle();
-            var midPoint = (currentPos + nextPos) / 2f;
+            var segmentDir = segmentVec / segmentLength;
+            var segmentAngle = segmentVec.ToWorldAngle();
 
-            // Determine UV clipping for the last partial tile
-            var uv = new UIBox2(0, 0, 1, 1);
-            var isPartial = nextDist < totalLength && (nextDist - currentDist) < textureHeightTiling * 0.99f;
-            if (isPartial)
+            // Distance already drawn inside this segment
+            var distDrawn = 0f;
+
+            while (distDrawn < segmentLength - 0.001f)
             {
-                var fraction = (nextDist - currentDist) / textureHeightTiling;
-                uv = new UIBox2(0, 0, 1, fraction);
+                // How much we can draw before hitting either a tile boundary or the segment end
+                var remainingInTile = textureHeight - texOffset;
+                var drawLength = Math.Min(remainingInTile, (float)(segmentLength - distDrawn));
+
+                var startPos = segmentStart + segmentDir * distDrawn;
+                var endPos = startPos + segmentDir * drawLength;
+                var midPoint = (startPos + endPos) / 2f;
+
+                var uvTop = texOffset * EyeManager.PixelsPerMeter;
+                var uvBottom = (texOffset + drawLength) * EyeManager.PixelsPerMeter;
+                var uv = new UIBox2(0, uvTop, texture.Width, uvBottom);
+
+                // The box inside of which the texture will be drawn
+                var box = new Box2(
+                    -textureWidth / 2f,
+                    -drawLength / 2f,
+                    textureWidth / 2f,
+                    drawLength / 2f);
+                var rotatedBox = new Box2Rotated(
+                    box.Translated(midPoint),
+                    segmentAngle,
+                    midPoint);
+
+                worldHandle.DrawTextureRectRegion(texture, rotatedBox, color, uv);
+
+                // Advance within the tile and the segment
+                distDrawn += drawLength;
+                texOffset = (texOffset + drawLength) % textureHeight;
             }
-
-            var box = new Box2(
-                -textureWidth / 2f,
-                -segLen / 2f,
-                textureWidth / 2f,
-                segLen / 2f);
-            var rotatedBox = new Box2Rotated(box.Translated(midPoint), angle, midPoint);
-
-            worldHandle.DrawTextureRectRegion(texture, rotatedBox, color, uv);
-
-            currentDist = nextDist;
-            currentPos = nextPos;
+            // The next segment starts with the same texOffset (carry‑over of partial tile)
         }
     }
 
@@ -212,25 +201,5 @@ public sealed class RopeVisualsOverlay : Overlay
         // TODO: might need to take joints into account since they can be created with offsets
 
         return pos + rot.RotateVec(offset);
-    }
-
-    /// <summary>
-    ///     Finds a point belonging to the polyline such that its distance from the start of the polyline is equal to the distance arg.
-    /// </summary>
-    private Vector2 GetPolylinePositionAtDistance(float distance, Vector2[] vertices, float[] lengths, int startIdx, int endIdx)
-    {
-        float accumulated = 0;
-        for (var i = startIdx; i <= endIdx - 1; i++)
-        {
-            var segment = vertices[i + 1] - vertices[i];
-            var segLen = lengths[i];
-            if (distance <= accumulated + segLen)
-            {
-                var t = (distance - accumulated) / segLen;
-                return vertices[i] + segment * t;
-            }
-            accumulated += segLen;
-        }
-        return vertices[endIdx];
     }
 }

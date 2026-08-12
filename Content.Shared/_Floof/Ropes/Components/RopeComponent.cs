@@ -37,6 +37,12 @@ public sealed partial class RopeComponent : Component
     public float RopeLength, LinkLength;
 
     /// <summary>
+    ///     Optional color tint for the rope sprite.
+    /// </summary>
+    [ViewVariables(VVAccess.ReadWrite)]
+    public Color? Color;
+
+    /// <summary>
     ///     True if the links of this rope have been temporarily sent to nullspace for preservation while both entities are in the same container.
     /// </summary>
     [ViewVariables(VVAccess.ReadWrite)]
@@ -66,6 +72,7 @@ public sealed partial class RopeComponent : Component
         public (NetEntity, string)? ConnectedStart, ConnectedEnd;
         public List<LinkState> Links;
         public float RopeLength, LinkLength;
+        public Color? Color;
         public bool IsTemporarilyNullspaced;
 
         /// Creates a new state from a component
@@ -79,6 +86,7 @@ public sealed partial class RopeComponent : Component
             Links = comp.Links.Select(it => new LinkState(it, entMan)).ToList();
             RopeLength = comp.RopeLength;
             LinkLength = comp.LinkLength;
+            Color = comp.Color;
             IsTemporarilyNullspaced = comp.IsTemporarilyNullspaced;
         }
 
@@ -91,6 +99,7 @@ public sealed partial class RopeComponent : Component
             comp.Links = Links.Select(it => it.ToLink(entMan)).ToList();
             comp.RopeLength = RopeLength;
             comp.LinkLength = LinkLength;
+            comp.Color = Color;
             comp.IsTemporarilyNullspaced = IsTemporarilyNullspaced;
         }
 
