@@ -14,7 +14,9 @@ public sealed partial class RopeSystem
         // On shutdown, destroy all links
         foreach (var link in ent.Comp.Links)
         {
-            PredictedQueueDel(link.LinkEntity);
+            // Client can have these set to EntityUid.Invalid during network sync
+            if (link.LinkEntity.Valid)
+                PredictedQueueDel(link.LinkEntity);
         }
     }
 }

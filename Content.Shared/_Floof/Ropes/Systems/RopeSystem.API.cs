@@ -210,10 +210,10 @@ public sealed partial class RopeSystem
             a.RightJoint = b.LeftJoint = joint.ID;
 
             // For debugging purposes only
-            var leash = EnsureComp<LeashedVisualsComponent>(a.LinkEntity);
-            leash.Source = a.LinkEntity;
-            leash.Target = b.LinkEntity;
-            leash.Sprite = config.Sprite;
+            // var leash = EnsureComp<LeashedVisualsComponent>(a.LinkEntity);
+            // leash.Source = a.LinkEntity;
+            // leash.Target = b.LinkEntity;
+            // leash.Sprite = config.Sprite;
         }
 
         return (uid, rope);

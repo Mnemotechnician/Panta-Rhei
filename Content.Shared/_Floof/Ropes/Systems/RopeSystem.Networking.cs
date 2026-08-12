@@ -18,7 +18,7 @@ public sealed partial class RopeSystem
 
     private void OnRopeHandleState(Entity<RopeComponent> ent, ref ComponentHandleState args)
     {
-        if (args.Next is not RopeComponent.State { } state)
+        if (args.Current is not RopeComponent.State { } state)
             return;
 
         state.Apply(ent.Comp, EntityManager);
