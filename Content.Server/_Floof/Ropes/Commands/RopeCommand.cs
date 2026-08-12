@@ -1,13 +1,13 @@
 using System.Linq;
 using System.Transactions;
 using Content.Server.Administration;
-using Content.Shared._Floof.Rope.Components;
-using Content.Shared._Floof.Rope.Prototypes;
-using Content.Shared._Floof.Rope.Systems;
+using Content.Shared._Floof.Ropes.Components;
+using Content.Shared._Floof.Ropes.Prototypes;
+using Content.Shared._Floof.Ropes.Systems;
 using Content.Shared.Administration;
 using Robust.Shared.Toolshed;
 
-namespace Content.Server._Floof.Rope.Commands;
+namespace Content.Server._Floof.Ropes.Commands;
 
 [ToolshedCommand, AdminCommand(AdminFlags.VarEdit)]
 public sealed class RopeCommand : ToolshedCommand

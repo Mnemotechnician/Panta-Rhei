@@ -1,8 +1,8 @@
 using System.Linq;
 using System.Numerics;
 using Content.Shared._Floof.Paint;
-using Content.Shared._Floof.Rope.Components;
-using Content.Shared._Floof.Rope.Prototypes;
+using Content.Shared._Floof.Ropes.Components;
+using Content.Shared._Floof.Ropes.Prototypes;
 using Content.Shared._Floof.Util;
 using Robust.Client.GameObjects;
 using Robust.Client.Graphics;

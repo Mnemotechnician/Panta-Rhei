@@ -1,6 +1,6 @@
-using Content.Shared._Floof.Rope.Components;
+using Content.Shared._Floof.Ropes.Components;
 
-namespace Content.Shared._Floof.Rope.Systems;
+namespace Content.Shared._Floof.Ropes.Systems;
 
 public sealed partial class RopeSystem
 {

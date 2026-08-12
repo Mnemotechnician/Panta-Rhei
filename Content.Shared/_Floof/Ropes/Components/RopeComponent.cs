@@ -1,10 +1,10 @@
 using System.Linq;
-using Content.Shared._Floof.Rope.Prototypes;
+using Content.Shared._Floof.Ropes.Prototypes;
 using Robust.Shared.GameStates;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Serialization;
 
-namespace Content.Shared._Floof.Rope.Components;
+namespace Content.Shared._Floof.Ropes.Components;
 
 /// <summary>
 ///     Contains data about a rope - an array of entities (links) connected into a chain via distance joints.

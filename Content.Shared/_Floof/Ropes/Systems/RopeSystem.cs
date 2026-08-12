@@ -1,7 +1,7 @@
 using Robust.Shared.Network;
 using Robust.Shared.Physics.Systems;
 
-namespace Content.Shared._Floof.Rope.Systems;
+namespace Content.Shared._Floof.Ropes.Systems;
 
 public sealed partial class RopeSystem : EntitySystem
 {

@@ -1,7 +1,7 @@
 using System.Numerics;
 using Robust.Shared.Physics.Dynamics.Joints;
 
-namespace Content.Shared._Floof.Rope.Systems;
+namespace Content.Shared._Floof.Ropes.Systems;
 
 public sealed partial class RopeSystem
 {

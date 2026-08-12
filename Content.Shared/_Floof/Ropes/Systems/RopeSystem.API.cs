@@ -1,11 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using Content.Shared._Floof.Leash.Components;
-using Content.Shared._Floof.Rope.Components;
-using Content.Shared._Floof.Rope.Prototypes;
+using Content.Shared._Floof.Ropes.Components;
+using Content.Shared._Floof.Ropes.Prototypes;
 using Robust.Shared.Map;
 
-namespace Content.Shared._Floof.Rope.Systems;
+namespace Content.Shared._Floof.Ropes.Systems;
 
 public sealed partial class RopeSystem
 {

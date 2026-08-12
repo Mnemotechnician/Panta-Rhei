@@ -2,7 +2,7 @@ using Robust.Shared.Prototypes;
 using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype.Array;
 using Robust.Shared.Utility;
 
-namespace Content.Shared._Floof.Rope.Prototypes;
+namespace Content.Shared._Floof.Ropes.Prototypes;
 
 /// <summary>
 ///     Describes how a rope should be created.
