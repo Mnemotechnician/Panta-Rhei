@@ -1,8 +1,10 @@
 using System.Linq;
+using System.Numerics;
 using Content.Shared._Floof.Ropes.Prototypes;
 using Robust.Shared.GameStates;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Serialization;
+using YamlDotNet.Core.Tokens;
 
 namespace Content.Shared._Floof.Ropes.Components;
 
@@ -25,7 +27,7 @@ public sealed partial class RopeComponent : Component
     ///     Entities to which the rope is connected on the start and end, as well as the IDs of their respective joints.
     /// </summary>
     [ViewVariables(VVAccess.ReadWrite)]
-    public (EntityUid, string)? ConnectedStart, ConnectedEnd;
+    public AnchorInfo? ConnectedStart, ConnectedEnd;
 
     /// <summary>
     ///     List of all links this rope is made of.
@@ -44,9 +46,10 @@ public sealed partial class RopeComponent : Component
 
     /// <summary>
     ///     True if the links of this rope have been temporarily sent to nullspace for preservation while both entities are in the same container.
+    ///     Links and anchors might have invalid joint IDs assigned to them.
     /// </summary>
     [ViewVariables(VVAccess.ReadWrite)]
-    public bool IsTemporarilyNullspaced;
+    public bool IsDisabled;
 
     public sealed class Link
     {
@@ -63,13 +66,27 @@ public sealed partial class RopeComponent : Component
         public string? LeftJoint, RightJoint;
     }
 
+    public record struct AnchorInfo
+    {
+        public EntityUid Anchor;
+        public string JointId;
+        public Vector2 Offset;
+
+        public AnchorInfo(EntityUid anchor, string jointId, Vector2 offset)
+        {
+            Anchor = anchor;
+            JointId = jointId;
+            Offset = offset;
+        }
+    }
+
     // Serializable state
     // I don't want to shove this shit into the the system, fuck that
     [Serializable, NetSerializable]
     public sealed partial class State : ComponentState
     {
         public ProtoId<RopeConfigurationPrototype> Configuration;
-        public (NetEntity, string)? ConnectedStart, ConnectedEnd;
+        public (NetEntity Anchor, string JointId, Vector2 Offset)? ConnectedStart, ConnectedEnd;
         public List<LinkState> Links;
         public float RopeLength, LinkLength;
         public Color? Color;
@@ -80,27 +97,27 @@ public sealed partial class RopeComponent : Component
         {
             Configuration = comp.Configuration;
             if (comp.ConnectedStart is {} start)
-                ConnectedStart = (entMan.GetNetEntity(start.Item1), start.Item2);
+                ConnectedStart = (entMan.GetNetEntity(start.Anchor), start.JointId, start.Offset);
             if (comp.ConnectedEnd is {} end)
-                ConnectedEnd = (entMan.GetNetEntity(end.Item1), end.Item2);
+                ConnectedEnd = (entMan.GetNetEntity(end.Anchor), end.JointId, end.Offset);
             Links = comp.Links.Select(it => new LinkState(it, entMan)).ToList();
             RopeLength = comp.RopeLength;
             LinkLength = comp.LinkLength;
             Color = comp.Color;
-            IsTemporarilyNullspaced = comp.IsTemporarilyNullspaced;
+            IsTemporarilyNullspaced = comp.IsDisabled;
         }
 
         /// Applies this state to the component
         public void Apply(RopeComponent comp, EntityManager entMan)
         {
             comp.Configuration = Configuration;
-            comp.ConnectedStart = ConnectedStart is { } start ? (entMan.GetEntity(start.Item1), start.Item2) : null;
-            comp.ConnectedEnd = ConnectedEnd is { } end ? (entMan.GetEntity(end.Item1), end.Item2) : null;
+            comp.ConnectedStart = ConnectedStart is { } start ? new(entMan.GetEntity(start.Anchor), start.JointId, start.Offset) : null;
+            comp.ConnectedEnd = ConnectedEnd is { } end ? new(entMan.GetEntity(end.Anchor), end.JointId, end.Offset) : null;
             comp.Links = Links.Select(it => it.ToLink(entMan)).ToList();
             comp.RopeLength = RopeLength;
             comp.LinkLength = LinkLength;
             comp.Color = Color;
-            comp.IsTemporarilyNullspaced = IsTemporarilyNullspaced;
+            comp.IsDisabled = IsTemporarilyNullspaced;
         }
 
         [Serializable, NetSerializable]

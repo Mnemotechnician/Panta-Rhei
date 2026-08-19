@@ -22,5 +22,15 @@ public sealed partial class RopeSystem
             return;
 
         state.Apply(ent.Comp, EntityManager);
+
+        // Go through each link and add RopeLinkComponent, which is non-netsynced
+        foreach (var link in ent.Comp.Links)
+        {
+            if (!link.LinkEntity.Valid)
+                continue;
+
+            var linkComp = EnsureComp<RopeLinkComponent>(link.LinkEntity);
+            linkComp.Rope = ent;
+        }
     }
 }

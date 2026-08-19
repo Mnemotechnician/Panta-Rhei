@@ -53,7 +53,7 @@ public sealed class RopeVisualsOverlay : Overlay
         var query = _entMan.EntityQueryEnumerator<RopeComponent>();
         while (query.MoveNext(out var ropeUid, out var ropeComp))
         {
-            if (ropeComp.IsTemporarilyNullspaced)
+            if (ropeComp.IsDisabled)
                 continue;
 
             // Get configuration and sprite
@@ -86,10 +86,10 @@ public sealed class RopeVisualsOverlay : Overlay
 
             // Set first and last array elements to rope anchors
             if (ropeComp.ConnectedStart is {} start)
-                positions[0] = GetAnchorPosition(start.Item1, args);
+                positions[0] = GetAnchorPosition(start.Anchor, args);
 
             if (ropeComp.ConnectedEnd is {} end)
-                positions[^1] = GetAnchorPosition(end.Item1, args);
+                positions[^1] = GetAnchorPosition(end.Anchor, args);
 
             if (!canRender)
                 continue;

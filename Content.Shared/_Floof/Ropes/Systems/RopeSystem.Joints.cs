@@ -1,11 +1,14 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using Content.Shared._Floof.Ropes.Components;
+using Robust.Shared.Physics;
 using Robust.Shared.Physics.Dynamics.Joints;
 
 namespace Content.Shared._Floof.Ropes.Systems;
 
 public sealed partial class RopeSystem
 {
-    private DistanceJoint CreateDistanceJoint(EntityUid a, EntityUid b, float distance, Vector2 anchorA = default, Vector2 anchorB = default)
+    private DistanceJoint CreateDistanceJoint(EntityUid a, EntityUid b, float length, Vector2 anchorA = default, Vector2 anchorB = default)
     {
         var id = GetEffectiveJointId(a, b);
         var joint = _joints.CreateDistanceJoint(
@@ -14,14 +17,35 @@ public sealed partial class RopeSystem
             anchorA,
             anchorB,
             id: id,
-            minimumDistance: distance);
+            minimumDistance: 0f);
 
-        joint.Length = distance;
-        joint.MaxLength = distance * 1.5f;
         joint.Damping = 0.1f;
-        joint.Stiffness = 10f;
+        joint.Stiffness = 500f; // Real ropes often have stiffness ranging from 10k to 100k N/m, but we set it way lower to avoid issues
+        SetLinkLength(joint, length);
 
         return joint;
+    }
+
+    private void SetLinkLength(DistanceJoint joint, float length)
+    {
+        // Note: length is how long the physics solver will try to make the joint. MaxLength is the hard limit before distances are clamped.
+        joint.Length = length;
+        joint.MaxLength = length * 1.5f;
+        joint.Breakpoint = length * joint.Stiffness * 5f; // This should turn the joint off if it tries to pull from 5x its max length (such as after one of the entities teleported)
+    }
+
+    private bool ResolveJoint(EntityUid anchor, string jointId, [NotNullWhen(true)] out DistanceJoint? joint)
+    {
+        if (!TryComp<JointComponent>(anchor, out var jointComp)
+            || !jointComp.GetJoints.TryGetValue(jointId, out var jointObj)
+            || jointObj is not DistanceJoint distanceJoint)
+        {
+            joint = null;
+            return false;
+        }
+
+        joint = distanceJoint;
+        return true;
     }
 
     private string GetEffectiveJointId(EntityUid a, EntityUid b)

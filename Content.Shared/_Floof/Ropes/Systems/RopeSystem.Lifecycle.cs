@@ -1,4 +1,5 @@
 using Content.Shared._Floof.Ropes.Components;
+using Robust.Shared.Physics;
 
 namespace Content.Shared._Floof.Ropes.Systems;
 
@@ -7,6 +8,8 @@ public sealed partial class RopeSystem
     public void InitializeLifecycle()
     {
         SubscribeLocalEvent<RopeComponent, ComponentShutdown>(OnShutdown);
+
+        SubscribeLocalEvent<RopeLinkComponent, JointRemovedEvent>(OnJointRemoved);
     }
 
     private void OnShutdown(Entity<RopeComponent> ent, ref ComponentShutdown args)
@@ -18,5 +21,12 @@ public sealed partial class RopeSystem
             if (link.LinkEntity.Valid)
                 PredictedQueueDel(link.LinkEntity);
         }
+    }
+
+    private void OnJointRemoved(Entity<RopeLinkComponent> link, ref JointRemovedEvent args)
+    {
+
+
+        Log.Debug($"Joint {args.Joint.ID} is removed.");
     }
 }

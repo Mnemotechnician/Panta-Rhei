@@ -14,18 +14,29 @@ public sealed class RopeCommand : ToolshedCommand
 {
     private RopeSystem? _rope;
 
-    [CommandImplementation("create")]
-    public EntityUid Create(EntityUid leftAnchor, EntityUid rightAnchor, RopeConfigurationPrototype prototype, float? length = null)
+    [CommandImplementation("connect")]
+    public EntityUid Connect(EntityUid leftAnchor, EntityUid rightAnchor, RopeConfigurationPrototype prototype, float length = 0)
     {
         _rope ??= EntityManager.System<RopeSystem>();
         if (!Transform(leftAnchor).Coordinates.TryDistance(EntityManager, Transform(rightAnchor).Coordinates, out var dst))
             throw new Exception("Entities are on separate maps.");
 
-        length ??= dst;
-        if (length > dst)
+        if (length <= 0)
+            length = dst * 1.1f;
+        if (length < dst)
             throw new Exception("Refusing to create a rope shorter than the distance between its anchors.");
 
-        if (!_rope.TryCreateRope(leftAnchor, rightAnchor, prototype, length.Value, out var rope))
+        if (!_rope.TryCreateRope(leftAnchor, rightAnchor, prototype, length, out var rope))
+            throw new Exception("Couldn't create rope. See the server console.");
+
+        return rope.Value.Owner;
+    }
+
+    [CommandImplementation("create")]
+    public EntityUid Create(EntityUid leftAnchor, RopeConfigurationPrototype prototype, float length = 0)
+    {
+        _rope ??= EntityManager.System<RopeSystem>();
+        if (!_rope.TryCreateRope(leftAnchor, null, prototype, length, out var rope))
             throw new Exception("Couldn't create rope. See the server console.");
 
         return rope.Value.Owner;
