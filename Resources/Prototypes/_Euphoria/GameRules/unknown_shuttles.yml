@@ -6,9 +6,9 @@
     - id: UnknownShuttleSampleCollector
     - id: UnknownShuttleCasinoManager
     # Old wizden ones start
-    - id: UnknownShuttleCargoLost
-    - id: UnknownShuttleTravelingCuisine
-    - id: UnknownShuttleDisasterEvacPod
+#    - id: UnknownShuttleCargoLost # i'm guessing those got removed?
+#    - id: UnknownShuttleTravelingCuisine
+#    - id: UnknownShuttleDisasterEvacPod
     - id: UnknownShuttleHonki
     - id: UnknownShuttleSyndieEvacPod
     - id: UnknownShuttleNTQuark
